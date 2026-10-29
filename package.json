@@ -1,7 +1,7 @@
 {
   "name": "babblelab-dsp-workstation",
-  "version": "2.0.0",
-  "description": "Procedural speech babble, formant synthesis, and LTASS acoustic workstation",
+  "version": "2.1.0",
+  "description": "Calibrated procedural speech babble, formant synthesis, and LTASS acoustic workstation",
   "private": true,
   "scripts": {
     "deploy": "wrangler pages deploy . --project-name=babblelab-dsp-workstation"

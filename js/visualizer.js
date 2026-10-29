@@ -1,5 +1,5 @@
 /**
- * BabbleLab DSP Workstation v2.0.0 - Canvas Scope & FFT Visualizer
+ * BabbleLab DSP Workstation v2.1.0 - HiDPI Canvas Scope & FFT Visualizer
  */
 
 export class AudioVisualizer {
@@ -18,6 +18,17 @@ export class AudioVisualizer {
     this._render();
   }
 
+  _resize(canvas, ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.scale(dpr, dpr);
+    }
+    return { width: rect.width, height: rect.height };
+  }
+
   _render() {
     if (!this.isRunning) return;
     requestAnimationFrame(() => this._render());
@@ -33,8 +44,7 @@ export class AudioVisualizer {
 
     // 1. Draw Oscilloscope (Time-Domain)
     if (this.scopeCtx) {
-      const w = this.scopeCanvas.width;
-      const h = this.scopeCanvas.height;
+      const { width: w, height: h } = this._resize(this.scopeCanvas, this.scopeCtx);
       this.scopeCtx.fillStyle = '#020617';
       this.scopeCtx.fillRect(0, 0, w, h);
 
@@ -57,8 +67,7 @@ export class AudioVisualizer {
 
     // 2. Draw Spectrum Analyzer (Frequency-Domain FFT)
     if (this.spectrumCtx) {
-      const w = this.spectrumCanvas.width;
-      const h = this.spectrumCanvas.height;
+      const { width: w, height: h } = this._resize(this.spectrumCanvas, this.spectrumCtx);
       this.spectrumCtx.fillStyle = '#020617';
       this.spectrumCtx.fillRect(0, 0, w, h);
 

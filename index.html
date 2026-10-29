@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BabbleLab DSP Workstation v2.0.0</title>
-  <!-- Pico.css v2 Modern Theme -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.azure.min.css">
+  <title>BabbleLab DSP Workstation v2.1.0</title>
+  <!-- Modern Pico.css v2 Azure Palette -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.azure.min.css" crossorigin="anonymous">
   <!-- Tabulator v6 Modern CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -16,7 +16,7 @@
     <div class="container">
       <div class="hud-nav">
         <ul>
-          <li><strong>BabbleLab DSP <small>v2.0.0</small></strong></li>
+          <li><strong>BabbleLab DSP <small>v2.1.0</small></strong></li>
           <li><span id="active-status-badge" class="badge badge-secondary">Engine: Offline</span></li>
         </ul>
         <ul>
@@ -30,18 +30,18 @@
       <div class="visualizer-wrapper">
         <div class="canvas-frame">
           <span class="canvas-label">Time-Domain Oscilloscope</span>
-          <canvas id="scope-canvas" width="400" height="90"></canvas>
+          <canvas id="scope-canvas"></canvas>
         </div>
         <div class="canvas-frame">
           <span class="canvas-label">Frequency-Domain FFT Spectrum</span>
-          <canvas id="fft-canvas" width="400" height="90"></canvas>
+          <canvas id="fft-canvas"></canvas>
         </div>
       </div>
     </div>
   </header>
 
   <main class="container">
-    <!-- Real-Time Parameter Rack -->
+    <!-- Real-Time Parameter Control Rack -->
     <section class="param-rack">
       <details open>
         <summary role="button" class="outline">Real-Time DSP Parameter Rack</summary>
@@ -58,7 +58,7 @@
               <span>Spectral Tilt ($>1\text{ kHz}$)</span>
               <strong id="val-tilt">-12.0 dB/oct</strong>
             </label>
-            <input type="range" id="ctrl-tilt" min="0" max="24" step="0.5" value="12">
+            <input type="range" id="ctrl-tilt" min="6" max="24" step="1" value="12">
           </div>
           <div class="slider-group">
             <label for="ctrl-mod">
@@ -78,7 +78,7 @@
       </details>
     </section>
 
-    <!-- Interactive Signal Matrix Table -->
+    <!-- Comparative Matrix Grid -->
     <section>
       <h2>Audited Babble & Noise Masking Matrix</h2>
       <p>Select any standardized baseline or modulation variation to synthesize it in real time via Web Audio:</p>
@@ -86,7 +86,7 @@
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/js/tabulator.min.js" crossorigin="anonymous"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

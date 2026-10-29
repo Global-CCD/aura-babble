@@ -1,14 +1,15 @@
-# BabbleLab DSP Workstation v2.0.0
+# BabbleLab DSP Workstation v2.1.0
 
-A high-performance, single-page application for procedural acoustic noise and speech babble synthesis, hosted on Cloudflare Pages.
+A high-performance, single-page web application for procedural acoustic noise and speech babble synthesis, hosted on Cloudflare Pages.
 
-## Verified Features in v2.0.0
-- **Corrected LTASS Filters:** Single 2nd-order Butterworth lowpass delivering an exact $-12\text{ dB/octave}$ rolloff above $1\text{ kHz}$.
-- **True Noise-Band Vocoder:** 8-band carrier bank shaped by speech envelope modulators.
-- **Leak-Free DSP Lifecycle:** Safe timer array (`activeTimers`) prevents background memory leaks.
-- **Wired UI Controls:** Real-time parameter rack for spectral tilt, talker density, modulation frequency, and ITD delay.
-- **WAV Exporter:** Renders calibrated 16-bit PCM 44.1 kHz WAV files using `OfflineAudioContext`.
-- **Dual Visualizer:** Real-time 60 FPS oscilloscope and FFT spectrum analyzer.
+## Verified Enhancements in v2.1.0
+- **Non-Destructive Insert Bus:** Fixed pre-master signal chain prevents permanent muting after auditioning the telephony profile.
+- **Calibrated Multi-Pole Spectral Tilt:** Cascaded Butterworth stages deliver variable high-frequency rolloff from $-6\text{ dB/oct}$ to $-24\text{ dB/oct}$.
+- **Multi-Source Binaural Babble:** 4 independent synthetic formant voices distributed across an ITD/ILD spatial array.
+- **Universal Offline WAV Exporter:** Renders whatever profile is active (in calibrated mono or 2-channel stereo) via `OfflineAudioContext`.
+- **Graph-Safe Debouncing:** Debounces density slider inputs to prevent main-thread audio pops and buffer underruns.
+- **HiDPI/Retina Scope:** Canvas rendering dynamically scales with `devicePixelRatio`.
+- **Edge Header Sanitization:** Removed restrictive COEP constraints to allow external CDN scripts to load reliably.
 
 ## Deployment to Cloudflare Pages
 

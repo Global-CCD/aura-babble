@@ -1,5 +1,5 @@
 /**
- * BabbleLab DSP Workstation v2.0.0 - Application Controller
+ * BabbleLab DSP Workstation v2.1.0 - Application Controller & Universal WAV Exporter
  */
 
 import { AcousticEngine } from './audio-dsp.js';
@@ -8,6 +8,7 @@ import { matrixData } from './matrix-data.js';
 
 const engine = new AcousticEngine();
 let visualizer = null;
+let speakerDebounceTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Tabulator v6 Grid
@@ -43,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ]
   });
 
-  // 2. Dispatcher
+  // 2. Audio Dispatcher
   function dispatchSignal(id) {
     engine.init();
     if (!visualizer) {
@@ -76,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 3. Transport Controls
+  // 3. Transport Listeners
   document.getElementById('btn-power').addEventListener('click', () => {
     engine.init();
     dispatchSignal('babble4');
@@ -91,15 +92,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-power').innerText = '▶ Start Master Engine';
   });
 
-  // 4. Parameter Rack Listeners (Live DSP Updates)
+  // 4. Parameter Rack Listeners with Graph-Safe Debouncing
   const speakersSlider = document.getElementById('ctrl-speakers');
   speakersSlider.addEventListener('input', e => {
     const val = parseInt(e.target.value);
     document.getElementById('val-speakers').innerText = `${val} Talkers`;
     engine.params.speakers = val;
-    if (engine.currentType && engine.currentType.includes('babble')) {
-      engine.playFormantBabble(val);
-    }
+
+    clearTimeout(speakerDebounceTimer);
+    speakerDebounceTimer = setTimeout(() => {
+      if (engine.currentType && engine.currentType.includes('babble')) {
+        engine.playFormantBabble(val);
+      }
+    }, 60);
   });
 
   const tiltSlider = document.getElementById('ctrl-tilt');
@@ -123,40 +128,102 @@ document.addEventListener('DOMContentLoaded', () => {
     engine.setITD(val);
   });
 
-  // 5. Offline AudioContext 16-Bit PCM WAV Exporter
+  // 5. Universal Dynamic OfflineAudioContext 16-Bit WAV Exporter
   const exportBtn = document.getElementById('btn-export-wav');
   exportBtn.addEventListener('click', async () => {
+    if (!engine.currentType) {
+      alert('Please start or audition an acoustic signal before exporting.');
+      return;
+    }
+
     exportBtn.setAttribute('aria-busy', 'true');
-    exportBtn.innerText = 'Rendering 16-bit WAV...';
+    exportBtn.innerText = 'Rendering Calibrated WAV...';
 
     const duration = 3.0;
     const sampleRate = 44100;
-    const offlineCtx = new OfflineAudioContext(1, sampleRate * duration, sampleRate);
+    const isStereo = engine.currentType === 'spatial';
+    const channels = isStereo ? 2 : 1;
+    const offlineCtx = new OfflineAudioContext(channels, sampleRate * duration, sampleRate);
 
-    // Render active SSN filter topology into offline buffer
-    const samples = sampleRate * duration;
-    const buffer = offlineCtx.createBuffer(1, samples, sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < samples; i++) data[i] = Math.random() * 2 - 1;
+    // Build Offline Signal Chain
+    const hp = offlineCtx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = engine.params.fHp;
 
-    const src = offlineCtx.createBufferSource();
-    src.buffer = buffer;
     const lp = offlineCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = 1000;
     lp.Q.value = 0.7071;
 
-    src.connect(lp);
+    hp.connect(lp);
     lp.connect(offlineCtx.destination);
-    src.start();
+
+    if (isStereo) {
+      const merger = offlineCtx.createChannelMerger(2);
+      for (let i = 0; i < 4; i++) {
+        const osc = offlineCtx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = 105 + i * 32;
+
+        const bp = offlineCtx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 1200 + i * 250;
+
+        const delay = offlineCtx.createDelay();
+        const panOffset = (i / 3) * 2 - 1;
+        delay.delayTime.value = Math.max(0, panOffset * (engine.params.itd * 1e-6));
+
+        osc.connect(bp);
+        if (panOffset < 0) {
+          bp.connect(merger, 0, 0);
+        } else {
+          bp.connect(delay);
+          delay.connect(merger, 0, 1);
+        }
+
+        osc.start();
+        osc.stop(duration);
+      }
+      merger.connect(hp);
+    } else {
+      const noiseSamples = sampleRate * duration;
+      const noiseBuffer = offlineCtx.createBuffer(1, noiseSamples, sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < noiseSamples; i++) data[i] = Math.random() * 2 - 1;
+
+      const noiseSrc = offlineCtx.createBufferSource();
+      noiseSrc.buffer = noiseBuffer;
+
+      if (engine.currentType === 'am_ssn') {
+        const amGain = offlineCtx.createGain();
+        const lfo = offlineCtx.createOscillator();
+        lfo.frequency.value = engine.params.modFreq;
+
+        const scale = offlineCtx.createGain();
+        scale.gain.value = 0.425;
+        amGain.gain.value = 0.575;
+
+        lfo.connect(scale);
+        scale.connect(amGain.gain);
+        noiseSrc.connect(amGain);
+        amGain.connect(hp);
+        lfo.start();
+        lfo.stop(duration);
+      } else {
+        noiseSrc.connect(hp);
+      }
+
+      noiseSrc.start();
+      noiseSrc.stop(duration);
+    }
 
     const rendered = await offlineCtx.startRendering();
-    const wavBlob = audioBufferToWavBlob(rendered);
+    const wavBlob = audioBufferToWavBlob(rendered, channels);
     const url = URL.createObjectURL(wavBlob);
 
     const downloadLink = document.createElement('a');
     downloadLink.href = url;
-    downloadLink.download = `babblelab-masker-${Date.now()}.wav`;
+    downloadLink.download = `babblelab-${engine.currentType}-${Date.now()}.wav`;
     downloadLink.click();
     URL.revokeObjectURL(url);
 
@@ -165,13 +232,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Helper: Fast PCM WAV Serializer
-function audioBufferToWavBlob(buffer) {
-  const numChannels = 1;
+// Helper: Multi-Channel 16-Bit PCM WAV Serializer
+function audioBufferToWavBlob(buffer, numChannels) {
   const sampleRate = buffer.sampleRate;
   const bitDepth = 16;
-  const bytesPerSample = 2;
-  const dataLength = buffer.length * bytesPerSample;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataLength = buffer.length * blockAlign;
   const bufferLength = 44 + dataLength;
 
   const ab = new ArrayBuffer(bufferLength);
@@ -186,21 +253,28 @@ function audioBufferToWavBlob(buffer) {
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
+  view.setUint16(20, 1, true); // PCM format
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true);
-  view.setUint16(32, bytesPerSample, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
   view.setUint16(34, bitDepth, true);
   writeStr(36, 'data');
   view.setUint32(40, dataLength, true);
 
-  const channel = buffer.getChannelData(0);
-  let offset = 44;
-  for (let i = 0; i < channel.length; i++) {
-    const s = Math.max(-1, Math.min(1, channel[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    offset += 2;
+  const channelsData = [];
+  for (let ch = 0; ch < numChannels; ch++) {
+    channelsData.push(buffer.getChannelData(ch));
   }
+
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const s = Math.max(-1, Math.min(1, channelsData[ch][i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+
   return new Blob([view], { type: 'audio/wav' });
 }

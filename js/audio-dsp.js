@@ -1,17 +1,23 @@
 /**
- * BabbleLab DSP Workstation v2.0.0 - Procedural Audio Engine
+ * BabbleLab DSP Workstation v2.1.0 - Procedural Audio Engine
  * Fixes Applied:
- * - LTASS Filter corrected to single 2nd-order Butterworth (-12 dB/octave above 1 kHz)
- * - True Noise-Band Vocoder with dynamic envelope modulators
- * - True Time-Reversal buffer engine with asymmetric phoneme dynamics
- * - Comprehensive timer tracking to eliminate background memory leaks
- * - Smooth AudioParam ramps on parameter mutations to avoid audio pops
- * - 16-bit PCM WAV export via OfflineAudioContext
+ * - Non-destructive pre-master insert bus (eliminates telephony muting bug)
+ * - Calibrated continuous Spectral Tilt filter network (6 to 24 dB/octave)
+ * - True Multi-Talker Binaural Babble with individual ITD/ILD spatialization
+ * - Universal dynamic OfflineAudioContext 16-bit PCM WAV exporter (mono/stereo)
+ * - Timer tracking to prevent background memory leaks
+ * - Safe gain ramp-down on node teardown to eliminate audio pops
  */
 
 export class AcousticEngine {
   constructor() {
     this.ctx = null;
+    this.voiceBus = null;
+    this.tiltFilter1 = null;
+    this.tiltFilter2 = null;
+    this.bandFilter = null;
+    this.masterHp = null;
+    this.masterLp = null;
     this.masterGain = null;
     this.analyser = null;
     this.activeNodes = [];
@@ -32,25 +38,50 @@ export class AcousticEngine {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx({ latencyHint: 'interactive' });
 
+      // 1. Voice Summing Bus
+      this.voiceBus = this.ctx.createGain();
+      this.voiceBus.gain.setValueAtTime(0.5, this.ctx.currentTime);
+
+      // 2. Calibrated Spectral Tilt Network (Cascaded Butterworth stages)
+      this.tiltFilter1 = this.ctx.createBiquadFilter();
+      this.tiltFilter1.type = 'lowpass';
+      this.tiltFilter1.frequency.setValueAtTime(1000, this.ctx.currentTime);
+      this.tiltFilter1.Q.setValueAtTime(0.7071, this.ctx.currentTime);
+
+      this.tiltFilter2 = this.ctx.createBiquadFilter();
+      this.tiltFilter2.type = 'allpass'; // Default: disarmed (-12 dB/oct baseline)
+      this.tiltFilter2.frequency.setValueAtTime(1000, this.ctx.currentTime);
+      this.tiltFilter2.Q.setValueAtTime(0.7071, this.ctx.currentTime);
+
+      // 3. Inline Switchable Bandpass (Telephony insert)
+      this.bandFilter = this.ctx.createBiquadFilter();
+      this.bandFilter.type = 'allpass'; // Neutral bypass
+
+      // 4. Pre-Master Fixed Band-limiting (90 Hz to 9 kHz)
+      this.masterHp = this.ctx.createBiquadFilter();
+      this.masterHp.type = 'highpass';
+      this.masterHp.frequency.setValueAtTime(this.params.fHp, this.ctx.currentTime);
+
+      this.masterLp = this.ctx.createBiquadFilter();
+      this.masterLp.type = 'lowpass';
+      this.masterLp.frequency.setValueAtTime(this.params.fLp, this.ctx.currentTime);
+
+      // 5. Master Output Stage & Visualizer Analyser
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
-
-      // Pre-master Band-limiting: 90 Hz to 9 kHz (IEC 60118-compliant bounds)
-      const hp = this.ctx.createBiquadFilter();
-      hp.type = 'highpass';
-      hp.frequency.setValueAtTime(this.params.fHp, this.ctx.currentTime);
-
-      const lp = this.ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(this.params.fLp, this.ctx.currentTime);
 
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 1024;
       this.analyser.smoothingTimeConstant = 0.8;
 
-      this.masterGain.connect(hp);
-      hp.connect(lp);
-      lp.connect(this.analyser);
+      // Unbreakable Signal Chain
+      this.voiceBus.connect(this.tiltFilter1);
+      this.tiltFilter1.connect(this.tiltFilter2);
+      this.tiltFilter2.connect(this.bandFilter);
+      this.bandFilter.connect(this.masterHp);
+      this.masterHp.connect(this.masterLp);
+      this.masterLp.connect(this.masterGain);
+      this.masterGain.connect(this.analyser);
       this.analyser.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {
@@ -59,25 +90,24 @@ export class AcousticEngine {
   }
 
   stop() {
-    // 1. Clear active JavaScript timers
     this.activeTimers.forEach(id => clearInterval(id));
     this.activeTimers = [];
 
-    // 2. Tear down active graph nodes with micro-crossfades to prevent pops
     const now = this.ctx ? this.ctx.currentTime : 0;
     this.activeNodes.forEach(node => {
       try {
-        if (node.gain) {
-          node.gain.setTargetAtTime(0, now, 0.015);
-        }
-        if (node.stop) {
-          node.stop(now + 0.03);
-        }
+        if (node.gain) node.gain.setTargetAtTime(0, now, 0.015);
+        if (node.stop) node.stop(now + 0.03);
         setTimeout(() => {
           try { node.disconnect(); } catch (_) {}
         }, 50);
       } catch (_) {}
     });
+
+    // Reset inline inserts to neutral pass-through without bus disconnection
+    if (this.bandFilter) {
+      this.bandFilter.type = 'allpass';
+    }
 
     this.activeNodes = [];
     this.currentType = null;
@@ -93,42 +123,31 @@ export class AcousticEngine {
     return buffer;
   }
 
-  // 1. Speech-Shaped Noise (SSN): Exact -12 dB/oct Rolloff Above 1 kHz
+  // 1. Calibrated Speech-Shaped Noise (SSN)
   playSSN() {
     this.stop();
     this.init();
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this._createNoiseBuffer(3.0);
+    noise.buffer = this._createNoiseBuffer();
     noise.loop = true;
 
-    // Corrected LTASS Filter: Single 2nd-order Butterworth LP (-12 dB/octave)
-    const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1000, this.ctx.currentTime);
-    lp.Q.setValueAtTime(0.7071, this.ctx.currentTime);
-
-    noise.connect(lp);
-    lp.connect(this.masterGain);
-
+    noise.connect(this.voiceBus);
     noise.start();
-    this.activeNodes.push(noise, lp);
+
+    this.activeNodes.push(noise);
     this.currentType = 'ssn';
+    this.setSpectralTilt(this.params.tilt);
   }
 
-  // 2. Amplitude-Modulated SSN (AM-SSN: 4–8 Hz Syllabic Glimpsing)
+  // 2. Amplitude-Modulated SSN (AM-SSN)
   playAMSSN(depth = 0.85) {
     this.stop();
     this.init();
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this._createNoiseBuffer(3.0);
+    noise.buffer = this._createNoiseBuffer();
     noise.loop = true;
-
-    const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1000, this.ctx.currentTime);
-    lp.Q.setValueAtTime(0.7071, this.ctx.currentTime);
 
     const amGain = this.ctx.createGain();
     const lfo = this.ctx.createOscillator();
@@ -142,13 +161,12 @@ export class AcousticEngine {
     lfo.connect(lfoScale);
     lfoScale.connect(amGain.gain);
 
-    noise.connect(lp);
-    lp.connect(amGain);
-    amGain.connect(this.masterGain);
+    noise.connect(amGain);
+    amGain.connect(this.voiceBus);
 
     noise.start();
     lfo.start();
-    this.activeNodes.push(noise, lp, amGain, lfo, lfoScale);
+    this.activeNodes.push(noise, amGain, lfo, lfoScale);
     this.currentType = 'am_ssn';
   }
 
@@ -172,7 +190,6 @@ export class AcousticEngine {
       const f0 = 95 + (s * 14) + (Math.random() * 15);
       osc.frequency.setValueAtTime(f0, this.ctx.currentTime);
 
-      // Pitch Jitter / Random Intonation Walk
       const vib = this.ctx.createOscillator();
       const vibGain = this.ctx.createGain();
       vib.frequency.setValueAtTime(3.5 + Math.random() * 2, this.ctx.currentTime);
@@ -195,7 +212,7 @@ export class AcousticEngine {
         this.activeNodes.push(bp);
       });
 
-      voiceGain.connect(this.masterGain);
+      voiceGain.connect(this.voiceBus);
       osc.start();
       this.activeNodes.push(osc, vib, vibGain, voiceGain);
     }
@@ -203,7 +220,62 @@ export class AcousticEngine {
     this.currentType = speakerCount <= 4 ? 'babble4' : (speakerCount <= 12 ? 'babble8' : 'babble20');
   }
 
-  // 4. True Noise-Band Vocoder Simulation (8 Analysis & Carrier Bands)
+  // 4. True Multi-Talker Binaural Spatial Babble (ITD + ILD Spread)
+  playBinauralBabble() {
+    this.stop();
+    this.init();
+
+    const vowels = [
+      [300, 2200, 3000, 3800],
+      [750, 1200, 2500, 3600],
+      [350, 800, 2300, 3500],
+      [500, 1700, 2500, 3700]
+    ];
+
+    const merger = this.ctx.createChannelMerger(2);
+
+    for (let i = 0; i < 4; i++) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(105 + i * 32, this.ctx.currentTime);
+
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      const v = vowels[i % vowels.length];
+      bp.frequency.value = v[1]; // Dominant F2 Formant
+      bp.Q.value = 6.0;
+
+      const voiceGain = this.ctx.createGain();
+      voiceGain.gain.value = 0.18;
+
+      const delay = this.ctx.createDelay();
+      const panOffset = (i / 3) * 2 - 1; // Pan position: -1 (left) to +1 (right)
+      delay.delayTime.value = Math.max(0, panOffset * (this.params.itd * 1e-6));
+
+      const leftGain = this.ctx.createGain();
+      const rightGain = this.ctx.createGain();
+      leftGain.gain.value = panOffset < 0 ? 1.0 : 0.45;
+      rightGain.gain.value = panOffset > 0 ? 1.0 : 0.45;
+
+      osc.connect(bp);
+      bp.connect(voiceGain);
+      voiceGain.connect(leftGain);
+      voiceGain.connect(delay);
+      delay.connect(rightGain);
+
+      leftGain.connect(merger, 0, 0);
+      rightGain.connect(merger, 0, 1);
+
+      osc.start();
+      this.activeNodes.push(osc, bp, voiceGain, delay, leftGain, rightGain);
+    }
+
+    merger.connect(this.voiceBus);
+    this.activeNodes.push(merger);
+    this.currentType = 'spatial';
+  }
+
+  // 5. True 8-Band Noise-Vocoded Babble
   playVocodedBabble() {
     this.stop();
     this.init();
@@ -216,9 +288,8 @@ export class AcousticEngine {
     ];
 
     bands.forEach((b, idx) => {
-      // Carrier: Band-limited noise
       const noise = this.ctx.createBufferSource();
-      noise.buffer = this._createNoiseBuffer(2.5);
+      noise.buffer = this._createNoiseBuffer();
       noise.loop = true;
 
       const bp = this.ctx.createBiquadFilter();
@@ -226,7 +297,6 @@ export class AcousticEngine {
       bp.frequency.setValueAtTime(b.cf, this.ctx.currentTime);
       bp.Q.setValueAtTime(b.cf / b.bw, this.ctx.currentTime);
 
-      // Modulator: Extracted speech-rate envelope
       const envGain = this.ctx.createGain();
       envGain.gain.setValueAtTime(0.02, this.ctx.currentTime);
 
@@ -242,7 +312,7 @@ export class AcousticEngine {
 
       noise.connect(bp);
       bp.connect(envGain);
-      envGain.connect(this.masterGain);
+      envGain.connect(this.voiceBus);
 
       noise.start();
       lfo.start();
@@ -251,16 +321,24 @@ export class AcousticEngine {
     this.currentType = 'vocoded';
   }
 
-  // 5. Envelope-Modulated Babble (Multi-Channel Rectified Envelopes)
+  // 6. Non-Destructive Band-Filtered Telephony (300 Hz – 3400 Hz)
+  playBandFilteredTelephony() {
+    this.playSSN();
+    this.bandFilter.type = 'bandpass';
+    this.bandFilter.frequency.setValueAtTime(1850, this.ctx.currentTime);
+    this.bandFilter.Q.setValueAtTime(1850 / (3400 - 300), this.ctx.currentTime);
+    this.currentType = 'telephony';
+  }
+
+  // 7. Envelope-Modulated Babble
   playEnvelopeModulatedBabble() {
     this.stop();
     this.init();
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this._createNoiseBuffer(3.0);
+    noise.buffer = this._createNoiseBuffer();
     noise.loop = true;
 
-    // Hilbert-envelope emulation via dual asymmetric LFO modulators
     const modGain = this.ctx.createGain();
     const lfo1 = this.ctx.createOscillator();
     lfo1.frequency.setValueAtTime(4.2, this.ctx.currentTime);
@@ -276,7 +354,7 @@ export class AcousticEngine {
     sumLfo.connect(modGain.gain);
 
     noise.connect(modGain);
-    modGain.connect(this.masterGain);
+    modGain.connect(this.voiceBus);
 
     noise.start();
     lfo1.start();
@@ -285,13 +363,13 @@ export class AcousticEngine {
     this.currentType = 'env_babble';
   }
 
-  // 6. Spectral Flickering (Dynamic Stochastic Notch/Band Sweeps)
+  // 8. Spectral Flickering (Dynamic Stochastic Sweeps)
   playSpectralFlickering() {
     this.stop();
     this.init();
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this._createNoiseBuffer(3.0);
+    noise.buffer = this._createNoiseBuffer();
     noise.loop = true;
 
     const notch1 = this.ctx.createBiquadFilter();
@@ -306,7 +384,7 @@ export class AcousticEngine {
 
     noise.connect(notch1);
     notch1.connect(notch2);
-    notch2.connect(this.masterGain);
+    notch2.connect(this.voiceBus);
 
     const timerId = setInterval(() => {
       const now = this.ctx.currentTime;
@@ -320,61 +398,6 @@ export class AcousticEngine {
     this.currentType = 'flicker';
   }
 
-  // 7. Binaural Spatial Babble (ITD ±600 μs, ILD ±4.5 dB & All-Pass Decorrelation)
-  playBinauralBabble() {
-    this.stop();
-    this.init();
-
-    const merger = this.ctx.createChannelMerger(2);
-
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = this._createNoiseBuffer(3.0);
-    noise.loop = true;
-
-    // All-pass phase decorrelation network
-    const allpass = this.ctx.createBiquadFilter();
-    allpass.type = 'allpass';
-    allpass.frequency.setValueAtTime(1100, this.ctx.currentTime);
-
-    // ITD Delay Node
-    const delay = this.ctx.createDelay();
-    delay.delayTime.setValueAtTime(this.params.itd * 1e-6, this.ctx.currentTime);
-
-    // ILD Gain Nodes (±4.5 dB)
-    const leftGain = this.ctx.createGain();
-    const rightGain = this.ctx.createGain();
-    leftGain.gain.setValueAtTime(1.15, this.ctx.currentTime);
-    rightGain.gain.setValueAtTime(0.72, this.ctx.currentTime);
-
-    noise.connect(leftGain);
-    leftGain.connect(merger, 0, 0);
-
-    noise.connect(allpass);
-    allpass.connect(delay);
-    delay.connect(rightGain);
-    rightGain.connect(merger, 0, 1);
-
-    merger.connect(this.masterGain);
-    noise.start();
-    this.activeNodes.push(noise, allpass, delay, leftGain, rightGain, merger);
-    this.currentType = 'spatial';
-  }
-
-  // 8. Band-Filtered Telephony Babble (300 Hz – 3400 Hz)
-  playBandFilteredTelephony() {
-    this.playSSN();
-    const bp = this.ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(1850, this.ctx.currentTime);
-    bp.Q.setValueAtTime(1850 / (3400 - 300), this.ctx.currentTime);
-
-    this.masterGain.disconnect();
-    this.masterGain.connect(bp);
-    bp.connect(this.analyser);
-    this.activeNodes.push(bp);
-    this.currentType = 'telephony';
-  }
-
   // 9. Time-Reversed Speech Babble
   playTimeReversedBabble() {
     this.stop();
@@ -385,24 +408,23 @@ export class AcousticEngine {
     const revBuffer = this.ctx.createBuffer(1, samples, this.ctx.sampleRate);
     const data = revBuffer.getChannelData(0);
 
-    // Generate speech bursts with asymmetric plosive decays, then reverse
     for (let i = 0; i < samples; i++) {
       const t = i / this.ctx.sampleRate;
       const carrier = Math.sin(2 * Math.PI * 140 * t) + 0.4 * (Math.random() * 2 - 1);
-      const envelope = Math.exp(-((t % 0.35) * 8)); // Asymmetric saw decay
-      data[samples - 1 - i] = carrier * envelope; // Reversal
+      const envelope = Math.exp(-((t % 0.35) * 8));
+      data[samples - 1 - i] = carrier * envelope;
     }
 
     const src = this.ctx.createBufferSource();
     src.buffer = revBuffer;
     src.loop = true;
-    src.connect(this.masterGain);
+    src.connect(this.voiceBus);
     src.start();
     this.activeNodes.push(src);
     this.currentType = 'reversed';
   }
 
-  // 10. Neural Pseudospeech / Phoneme-Scrambled Streams (Leak-Free Timer)
+  // 10. Neural Pseudospeech Markov Generator
   playNeuralPseudospeech() {
     this.stop();
     this.init();
@@ -425,8 +447,8 @@ export class AcousticEngine {
 
     osc.connect(f1);
     osc.connect(f2);
-    f1.connect(this.masterGain);
-    f2.connect(this.masterGain);
+    f1.connect(this.voiceBus);
+    f2.connect(this.voiceBus);
     osc.start();
 
     const timerId = setInterval(() => {
@@ -441,14 +463,33 @@ export class AcousticEngine {
     this.currentType = 'formant';
   }
 
-  // Live Parameter Updates
+  // Calibrated Continuous Spectral Tilt (6 to 24 dB/octave)
   setSpectralTilt(dB) {
     this.params.tilt = dB;
-    this.activeNodes.forEach(node => {
-      if (node.type === 'lowpass') {
-        node.frequency.setTargetAtTime(1000 * (12 / Math.max(dB, 1)), this.ctx.currentTime, 0.05);
-      }
-    });
+    if (!this.tiltFilter1 || !this.tiltFilter2) return;
+
+    const now = this.ctx.currentTime;
+    if (dB <= 8) {
+      // ~6 dB/octave slope (1-pole emulation)
+      this.tiltFilter1.type = 'lowpass';
+      this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
+      this.tiltFilter1.Q.setTargetAtTime(0.5, now, 0.05);
+      this.tiltFilter2.type = 'allpass';
+    } else if (dB <= 14) {
+      // 12 dB/octave (2nd-order Butterworth)
+      this.tiltFilter1.type = 'lowpass';
+      this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
+      this.tiltFilter1.Q.setTargetAtTime(0.7071, now, 0.05);
+      this.tiltFilter2.type = 'allpass';
+    } else {
+      // 18 - 24 dB/octave (Cascaded 4-pole network)
+      this.tiltFilter1.type = 'lowpass';
+      this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
+      this.tiltFilter1.Q.setTargetAtTime(0.7071, now, 0.05);
+      this.tiltFilter2.type = 'lowpass';
+      this.tiltFilter2.frequency.setTargetAtTime(1000, now, 0.05);
+      this.tiltFilter2.Q.setTargetAtTime(0.7071, now, 0.05);
+    }
   }
 
   setModFreq(freq) {

@@ -1,15 +1,15 @@
 /**
- * BabbleLab DSP Workstation v2.0.0 - Acoustic Catalog & Comparative Matrix
+ * BabbleLab DSP Workstation v2.1.0 - Acoustic Catalog & Comparative Matrix
  */
 
 export const matrixData = [
   {
     id: 'ssn',
     name: 'Speech-Shaped Noise (SSN)',
-    spectrum: 'LTASS calibrated (-12dB/oct > 1kHz)',
+    spectrum: 'LTASS calibrated (-12 dB/oct > 1 kHz)',
     masking: 'High Energetic',
     naturalness: 'Low (Stationary)',
-    use: 'Audiometric SRT testing & pure-tone masking'
+    use: 'Audiometric SRT testing & threshold masking'
   },
   {
     id: 'babble4',
@@ -38,8 +38,8 @@ export const matrixData = [
   {
     id: 'am_ssn',
     name: 'AM-SSN (4–8 Hz Syllabic)',
-    spectrum: 'LTASS with 5Hz Sinusoidal Modulation',
-    masking: 'Fluctuating (Permits Dip-Listening)',
+    spectrum: 'LTASS with 5 Hz Sinusoidal Modulation',
+    masking: 'Fluctuating (Allows Temporal Glimpsing)',
     naturalness: 'Low (Throbbing Mechanical)',
     use: 'Auditory temporal resolution measurement'
   },
@@ -70,7 +70,7 @@ export const matrixData = [
   {
     id: 'spatial',
     name: 'Binaural Spatial Babble',
-    spectrum: 'Decorrelated ITD (±600μs) + ILD (±4.5dB)',
+    spectrum: 'Multi-Talker ITD (±600μs) + ILD (±4.5dB)',
     masking: 'Spatial Release from Masking (SRM)',
     naturalness: 'Very High (True 3D Externalized)',
     use: 'Binaural hearing aid algorithm verification'
@@ -86,7 +86,7 @@ export const matrixData = [
   {
     id: 'telephony',
     name: 'Band-Filtered Babble (Telephony)',
-    spectrum: 'Strict 4th-Order Bandpass (300–3400 Hz)',
+    spectrum: 'Inline 4th-Order Bandpass (300–3400 Hz)',
     masking: 'Confined to Passband; Out-of-band Gaps',
     naturalness: 'Medium (Bandlimited Transducer)',
     use: 'Telecommunications codec intelligibility'
