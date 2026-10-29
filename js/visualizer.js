@@ -1,7 +1,3 @@
-/**
- * BabbleLab DSP Workstation v2.1.0 - HiDPI Canvas Scope & FFT Visualizer
- */
-
 export class AudioVisualizer {
   constructor(analyser, scopeCanvasId, spectrumCanvasId) {
     this.analyser = analyser;
@@ -42,7 +38,7 @@ export class AudioVisualizer {
     this.analyser.getByteTimeDomainData(timeData);
     this.analyser.getByteFrequencyData(freqData);
 
-    // 1. Draw Oscilloscope (Time-Domain)
+    // Oscilloscope (Time-Domain)
     if (this.scopeCtx) {
       const { width: w, height: h } = this._resize(this.scopeCanvas, this.scopeCtx);
       this.scopeCtx.fillStyle = '#020617';
@@ -65,7 +61,7 @@ export class AudioVisualizer {
       this.scopeCtx.stroke();
     }
 
-    // 2. Draw Spectrum Analyzer (Frequency-Domain FFT)
+    // Spectrum Analyzer (Frequency-Domain FFT)
     if (this.spectrumCtx) {
       const { width: w, height: h } = this._resize(this.spectrumCanvas, this.spectrumCtx);
       this.spectrumCtx.fillStyle = '#020617';

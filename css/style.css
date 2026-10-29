@@ -1,16 +1,26 @@
 /* ==========================================================================
-   BabbleLab DSP Workstation v2.1.0 - Modern Pico v2 & Tabulator Theme Layer
+   BabbleLab DSP Workstation v2.2.0 - UI Theme & Visualizer Styles
    ========================================================================== */
 
 :root {
   --pico-font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
   --pico-font-size: 87.5%;
   --pico-border-radius: 0.375rem;
-  --hud-bg: rgba(15, 23, 42, 0.90);
+  --pico-background-color: #0b1120;
+  --pico-color: #f1f5f9;
+  --pico-card-background-color: #0f172a;
+  --hud-bg: rgba(15, 23, 42, 0.94);
   --hud-border: rgba(255, 255, 255, 0.08);
   --accent-cyan: #38bdf8;
   --accent-emerald: #34d399;
-  --accent-rose: #f43f5e;
+}
+
+html, body {
+  background-color: #0b1120 !important;
+  color: #f1f5f9 !important;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 body {
@@ -26,7 +36,7 @@ body {
   -webkit-backdrop-filter: blur(16px);
   background: var(--hud-bg);
   border-bottom: 1px solid var(--hud-border);
-  padding: 0.65rem 0;
+  padding: 0.75rem 0;
   margin-bottom: 1.5rem;
 }
 
@@ -53,7 +63,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
-  margin-top: 0.35rem;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 768px) {
@@ -80,8 +90,8 @@ body {
 
 .canvas-label {
   position: absolute;
-  top: 4px;
-  left: 6px;
+  top: 5px;
+  left: 8px;
   font-size: 0.65rem;
   text-transform: uppercase;
   color: #64748b;
@@ -112,14 +122,25 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-/* Compact Sliders */
+/* Parameter Rack */
 .param-rack {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  background: #0f172a;
+  border: 1px solid var(--hud-border);
+  border-radius: var(--pico-border-radius);
+  padding: 1rem;
+}
+
+.param-rack details {
+  margin: 0;
+  border: none;
 }
 
 .param-rack summary {
   font-weight: 700;
   font-size: 0.9rem;
+  color: #e2e8f0;
+  margin-bottom: 0.5rem;
 }
 
 .slider-group label {
@@ -127,35 +148,50 @@ body {
   margin-bottom: 0.25rem;
   display: flex;
   justify-content: space-between;
+  color: #94a3b8;
+}
+
+.slider-group label strong {
+  color: #38bdf8;
 }
 
 .slider-group input[type="range"] {
   margin-bottom: 0.2rem;
+  accent-color: #38bdf8;
 }
 
-/* Tabulator v6 Modern Dark Theme Integration */
+/* Tabulator v6 Modern Dark Theme Overrides */
+#matrix-grid {
+  min-height: 420px;
+  background: #0f172a;
+  border: 1px solid var(--hud-border);
+  border-radius: var(--pico-border-radius);
+  overflow: hidden;
+}
+
 .tabulator {
   background-color: transparent !important;
-  border: 1px solid var(--hud-border) !important;
+  border: none !important;
   font-size: 0.8rem !important;
-  border-radius: var(--pico-border-radius);
 }
 
 .tabulator .tabulator-header {
-  background-color: rgba(30, 41, 59, 0.75) !important;
-  color: var(--pico-color) !important;
-  border-bottom: 2px solid var(--hud-border) !important;
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-bottom: 1px solid var(--hud-border) !important;
+  font-weight: 700;
 }
 
 .tabulator .tabulator-col {
   background: transparent !important;
+  border-right: 1px solid var(--hud-border) !important;
 }
 
 .tabulator .tabulator-row {
   background-color: transparent !important;
-  color: var(--pico-color) !important;
-  border-bottom: 1px solid var(--hud-border) !important;
-  min-height: 42px;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  min-height: 44px;
 }
 
 .tabulator .tabulator-row:hover {
@@ -163,15 +199,23 @@ body {
 }
 
 .tabulator .tabulator-cell {
-  padding: 8px 12px !important;
+  padding: 10px 14px !important;
   display: flex;
   align-items: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.03) !important;
 }
 
 .btn-audition {
-  padding: 0.2rem 0.55rem !important;
+  padding: 0.25rem 0.65rem !important;
   margin: 0 !important;
-  font-size: 0.72rem !important;
+  font-size: 0.75rem !important;
   line-height: 1.2 !important;
   width: auto;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+}
+
+.btn-audition:hover {
+  background-color: #38bdf8 !important;
+  color: #020617 !important;
 }

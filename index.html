@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BabbleLab DSP Workstation v2.1.0</title>
-  <!-- Modern Pico.css v2 Azure Palette -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.azure.min.css" crossorigin="anonymous">
-  <!-- Tabulator v6 Modern CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css" crossorigin="anonymous">
+  <title>BabbleLab DSP Workstation v2.2.0</title>
+  <!-- Verified Pico.css v2 Cyan Theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.cyan.min.css" crossorigin="anonymous">
+  <!-- Tabulator v6 Midnight Theme for Dark Mode -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <!-- Sticky Glassmorphic Transport HUD -->
+  <!-- Transport HUD -->
   <header class="hud-header">
     <div class="container">
       <div class="hud-nav">
         <ul>
-          <li><strong>BabbleLab DSP <small>v2.1.0</small></strong></li>
+          <li><strong>BabbleLab DSP <small>v2.2.0</small></strong></li>
           <li><span id="active-status-badge" class="badge badge-secondary">Engine: Offline</span></li>
         </ul>
         <ul>
@@ -26,7 +26,7 @@
         </ul>
       </div>
 
-      <!-- Real-Time Scope & Spectrum Analyzers -->
+      <!-- Real-Time Analyzers -->
       <div class="visualizer-wrapper">
         <div class="canvas-frame">
           <span class="canvas-label">Time-Domain Oscilloscope</span>
@@ -41,35 +41,35 @@
   </header>
 
   <main class="container">
-    <!-- Real-Time Parameter Control Rack -->
+    <!-- Physical Boundary Parameter Rack -->
     <section class="param-rack">
       <details open>
-        <summary role="button" class="outline">Real-Time DSP Parameter Rack</summary>
+        <summary role="button" class="outline">Real-Time DSP Parameter Rack (Full Physical Range)</summary>
         <div class="grid">
           <div class="slider-group">
             <label for="ctrl-speakers">
-              <span>Talker Density ($N$)</span>
+              <span>Talker Density ($N$) [1 to 32]</span>
               <strong id="val-speakers">4 Talkers</strong>
             </label>
-            <input type="range" id="ctrl-speakers" min="1" max="16" value="4">
+            <input type="range" id="ctrl-speakers" min="1" max="32" step="1" value="4">
           </div>
           <div class="slider-group">
             <label for="ctrl-tilt">
-              <span>Spectral Tilt ($>1\text{ kHz}$)</span>
+              <span>Spectral Tilt [Flat 0 to -24 dB/oct]</span>
               <strong id="val-tilt">-12.0 dB/oct</strong>
             </label>
-            <input type="range" id="ctrl-tilt" min="6" max="24" step="1" value="12">
+            <input type="range" id="ctrl-tilt" min="0" max="24" step="0.5" value="12">
           </div>
           <div class="slider-group">
             <label for="ctrl-mod">
-              <span>Syllabic Mod ($f_m$)</span>
+              <span>Syllabic Mod ($f_m$) [DC 0 to Roughness 50 Hz]</span>
               <strong id="val-mod">5.0 Hz</strong>
             </label>
-            <input type="range" id="ctrl-mod" min="1" max="12" step="0.5" value="5">
+            <input type="range" id="ctrl-mod" min="0" max="50" step="0.5" value="5">
           </div>
           <div class="slider-group">
             <label for="ctrl-itd">
-              <span>Binaural Delay ($\text{ITD}$)</span>
+              <span>Binaural Delay ($\text{ITD}$) [Bipolar ±600 μs]</span>
               <strong id="val-itd">±300 μs</strong>
             </label>
             <input type="range" id="ctrl-itd" min="0" max="600" step="25" value="300">
@@ -78,9 +78,9 @@
       </details>
     </section>
 
-    <!-- Comparative Matrix Grid -->
+    <!-- Matrix Table -->
     <section>
-      <h2>Audited Babble & Noise Masking Matrix</h2>
+      <h2>Audited Babble &amp; Noise Masking Matrix</h2>
       <p>Select any standardized baseline or modulation variation to synthesize it in real time via Web Audio:</p>
       <div id="matrix-grid"></div>
     </section>

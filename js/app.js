@@ -1,7 +1,3 @@
-/**
- * BabbleLab DSP Workstation v2.1.0 - Application Controller & Universal WAV Exporter
- */
-
 import { AcousticEngine } from './audio-dsp.js';
 import { AudioVisualizer } from './visualizer.js';
 import { matrixData } from './matrix-data.js';
@@ -11,7 +7,6 @@ let visualizer = null;
 let speakerDebounceTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Initialize Tabulator v6 Grid
   const table = new Tabulator('#matrix-grid', {
     data: matrixData,
     layout: 'fitColumns',
@@ -44,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ]
   });
 
-  // 2. Audio Dispatcher
   function dispatchSignal(id) {
     engine.init();
     if (!visualizer) {
@@ -77,7 +71,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 3. Transport Listeners
   document.getElementById('btn-power').addEventListener('click', () => {
     engine.init();
     dispatchSignal('babble4');
@@ -92,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-power').innerText = '▶ Start Master Engine';
   });
 
-  // 4. Parameter Rack Listeners with Graph-Safe Debouncing
+  // Slider bindings covering physical extrema
   const speakersSlider = document.getElementById('ctrl-speakers');
   speakersSlider.addEventListener('input', e => {
     const val = parseInt(e.target.value);
@@ -103,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
     speakerDebounceTimer = setTimeout(() => {
       if (engine.currentType && engine.currentType.includes('babble')) {
         engine.playFormantBabble(val);
+      } else if (engine.currentType === 'spatial') {
+        engine.playBinauralBabble();
       }
     }, 60);
   });
@@ -128,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     engine.setITD(val);
   });
 
-  // 5. Universal Dynamic OfflineAudioContext 16-Bit WAV Exporter
+  // Dynamic Offline WAV Exporter
   const exportBtn = document.getElementById('btn-export-wav');
   exportBtn.addEventListener('click', async () => {
     if (!engine.currentType) {
@@ -145,41 +140,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const channels = isStereo ? 2 : 1;
     const offlineCtx = new OfflineAudioContext(channels, sampleRate * duration, sampleRate);
 
-    // Build Offline Signal Chain
+    // Transparent offline filter chain
     const hp = offlineCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = engine.params.fHp;
 
     const lp = offlineCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 1000;
-    lp.Q.value = 0.7071;
+    lp.frequency.value = 20000;
 
     hp.connect(lp);
     lp.connect(offlineCtx.destination);
 
     if (isStereo) {
       const merger = offlineCtx.createChannelMerger(2);
-      for (let i = 0; i < 4; i++) {
+      const count = Math.min(Math.max(2, engine.params.speakers), 32);
+
+      for (let i = 0; i < count; i++) {
         const osc = offlineCtx.createOscillator();
         osc.type = 'sawtooth';
-        osc.frequency.value = 105 + i * 32;
+        osc.frequency.value = 95 + i * 16;
 
         const bp = offlineCtx.createBiquadFilter();
         bp.type = 'bandpass';
-        bp.frequency.value = 1200 + i * 250;
+        bp.frequency.value = 1200 + (i % 4) * 250;
+        bp.Q.value = 6.0;
 
-        const delay = offlineCtx.createDelay();
-        const panOffset = (i / 3) * 2 - 1;
-        delay.delayTime.value = Math.max(0, panOffset * (engine.params.itd * 1e-6));
+        const panOffset = (i / (count - 1 || 1)) * 2 - 1;
+        const targetItdSec = (engine.params.itd * 1e-6) * panOffset;
+
+        const leftDelay = offlineCtx.createDelay();
+        const rightDelay = offlineCtx.createDelay();
+        leftDelay.delayTime.value = targetItdSec > 0 ? targetItdSec : 0;
+        rightDelay.delayTime.value = targetItdSec < 0 ? Math.abs(targetItdSec) : 0;
+
+        const leftGain = offlineCtx.createGain();
+        const rightGain = offlineCtx.createGain();
+        leftGain.gain.value = panOffset <= 0 ? 1.0 : Math.pow(10, (-4.5 * Math.abs(panOffset)) / 20);
+        rightGain.gain.value = panOffset >= 0 ? 1.0 : Math.pow(10, (-4.5 * Math.abs(panOffset)) / 20);
 
         osc.connect(bp);
-        if (panOffset < 0) {
-          bp.connect(merger, 0, 0);
-        } else {
-          bp.connect(delay);
-          delay.connect(merger, 0, 1);
-        }
+        bp.connect(leftDelay);
+        leftDelay.connect(leftGain);
+        leftGain.connect(merger, 0, 0);
+
+        bp.connect(rightDelay);
+        rightDelay.connect(rightGain);
+        rightGain.connect(merger, 0, 1);
 
         osc.start();
         osc.stop(duration);
@@ -232,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Helper: Multi-Channel 16-Bit PCM WAV Serializer
 function audioBufferToWavBlob(buffer, numChannels) {
   const sampleRate = buffer.sampleRate;
   const bitDepth = 16;
@@ -253,7 +259,7 @@ function audioBufferToWavBlob(buffer, numChannels) {
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(20, 1, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * blockAlign, true);

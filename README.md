@@ -1,26 +1,18 @@
-# BabbleLab DSP Workstation v2.1.0
+# BabbleLab DSP Workstation v2.2.0
 
-A high-performance, single-page web application for procedural acoustic noise and speech babble synthesis, hosted on Cloudflare Pages.
+A high-performance single-page application for procedural acoustic noise and speech babble synthesis, hosted on Cloudflare Pages.
 
-## Verified Enhancements in v2.1.0
-- **Non-Destructive Insert Bus:** Fixed pre-master signal chain prevents permanent muting after auditioning the telephony profile.
-- **Calibrated Multi-Pole Spectral Tilt:** Cascaded Butterworth stages deliver variable high-frequency rolloff from $-6\text{ dB/oct}$ to $-24\text{ dB/oct}$.
-- **Multi-Source Binaural Babble:** 4 independent synthetic formant voices distributed across an ITD/ILD spatial array.
-- **Universal Offline WAV Exporter:** Renders whatever profile is active (in calibrated mono or 2-channel stereo) via `OfflineAudioContext`.
-- **Graph-Safe Debouncing:** Debounces density slider inputs to prevent main-thread audio pops and buffer underruns.
-- **HiDPI/Retina Scope:** Canvas rendering dynamically scales with `devicePixelRatio`.
-- **Edge Header Sanitization:** Removed restrictive COEP constraints to allow external CDN scripts to load reliably.
+## Verified Enhancements in v2.2.0
+- **Acoustic Extrema Parity:** Pre-master filter passband broadened ($20\text{ Hz}$ to $20,000\text{ Hz}$), preserving low vocal fry and high dental sibilants.
+- **Bipolar Dual-Ear ITD Delay:** Symmetrical delay lines provide true spatialization for both left and right azimuth positions with head-shadow ILD attenuation.
+- **Crest-Factor Headroom:** Formant resonators normalized ($0.22 / \sqrt{N}$) to prevent accumulator overflow and digital clipping.
+- **Physical Extrema UI Sliders:** Sliders expose full physical ranges ($N=1\text{–}32$, tilt $0\text{–}24\text{ dB/oct}$, $f_m=0\text{–}50\text{ Hz}$, ITD $\pm 600\text{ }\mu\text{s}$).
+- **Universal Dynamic WAV Exporter:** Exports mono/stereo 16-bit PCM WAV matching the active signal parameters.
+- **Verified Themes:** Incorporates Pico.css v2 Cyan palette and Tabulator Midnight theme.
 
 ## Deployment to Cloudflare Pages
-
-### Option 1: Direct CLI Deployment
 ```bash
 npm install -g wrangler
 wrangler login
 wrangler pages deploy . --project-name=babblelab-dsp-workstation
 ```
-
-### Option 2: Git Edge Deployment
-Push this directory to a GitHub/GitLab repository and link it to Cloudflare Pages:
-- **Build command:** *(Leave empty)*
-- **Build output directory:** `.`

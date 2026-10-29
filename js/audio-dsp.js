@@ -1,14 +1,3 @@
-/**
- * BabbleLab DSP Workstation v2.1.0 - Procedural Audio Engine
- * Fixes Applied:
- * - Non-destructive pre-master insert bus (eliminates telephony muting bug)
- * - Calibrated continuous Spectral Tilt filter network (6 to 24 dB/octave)
- * - True Multi-Talker Binaural Babble with individual ITD/ILD spatialization
- * - Universal dynamic OfflineAudioContext 16-bit PCM WAV exporter (mono/stereo)
- * - Timer tracking to prevent background memory leaks
- * - Safe gain ramp-down on node teardown to eliminate audio pops
- */
-
 export class AcousticEngine {
   constructor() {
     this.ctx = null;
@@ -28,8 +17,8 @@ export class AcousticEngine {
       modFreq: 5.0,
       tilt: 12.0,
       itd: 300,
-      fHp: 90,
-      fLp: 9000
+      fHp: 20,         // Extended to absolute auditory lower limit
+      fLp: 20000       // Extended to absolute auditory upper limit
     };
   }
 
@@ -38,26 +27,26 @@ export class AcousticEngine {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx({ latencyHint: 'interactive' });
 
-      // 1. Voice Summing Bus
+      // Summing bus
       this.voiceBus = this.ctx.createGain();
       this.voiceBus.gain.setValueAtTime(0.5, this.ctx.currentTime);
 
-      // 2. Calibrated Spectral Tilt Network (Cascaded Butterworth stages)
+      // Continuous Spectral Tilt Network
       this.tiltFilter1 = this.ctx.createBiquadFilter();
       this.tiltFilter1.type = 'lowpass';
       this.tiltFilter1.frequency.setValueAtTime(1000, this.ctx.currentTime);
       this.tiltFilter1.Q.setValueAtTime(0.7071, this.ctx.currentTime);
 
       this.tiltFilter2 = this.ctx.createBiquadFilter();
-      this.tiltFilter2.type = 'allpass'; // Default: disarmed (-12 dB/oct baseline)
+      this.tiltFilter2.type = 'allpass';
       this.tiltFilter2.frequency.setValueAtTime(1000, this.ctx.currentTime);
       this.tiltFilter2.Q.setValueAtTime(0.7071, this.ctx.currentTime);
 
-      // 3. Inline Switchable Bandpass (Telephony insert)
+      // Bypassable inline insert
       this.bandFilter = this.ctx.createBiquadFilter();
-      this.bandFilter.type = 'allpass'; // Neutral bypass
+      this.bandFilter.type = 'allpass';
 
-      // 4. Pre-Master Fixed Band-limiting (90 Hz to 9 kHz)
+      // Transparent pre-master bandwidth (20 Hz - 20,000 Hz)
       this.masterHp = this.ctx.createBiquadFilter();
       this.masterHp.type = 'highpass';
       this.masterHp.frequency.setValueAtTime(this.params.fHp, this.ctx.currentTime);
@@ -66,7 +55,6 @@ export class AcousticEngine {
       this.masterLp.type = 'lowpass';
       this.masterLp.frequency.setValueAtTime(this.params.fLp, this.ctx.currentTime);
 
-      // 5. Master Output Stage & Visualizer Analyser
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0.5, this.ctx.currentTime);
 
@@ -74,7 +62,7 @@ export class AcousticEngine {
       this.analyser.fftSize = 1024;
       this.analyser.smoothingTimeConstant = 0.8;
 
-      // Unbreakable Signal Chain
+      // Unbroken signal chain
       this.voiceBus.connect(this.tiltFilter1);
       this.tiltFilter1.connect(this.tiltFilter2);
       this.tiltFilter2.connect(this.bandFilter);
@@ -104,7 +92,6 @@ export class AcousticEngine {
       } catch (_) {}
     });
 
-    // Reset inline inserts to neutral pass-through without bus disconnection
     if (this.bandFilter) {
       this.bandFilter.type = 'allpass';
     }
@@ -123,7 +110,6 @@ export class AcousticEngine {
     return buffer;
   }
 
-  // 1. Calibrated Speech-Shaped Noise (SSN)
   playSSN() {
     this.stop();
     this.init();
@@ -140,7 +126,6 @@ export class AcousticEngine {
     this.setSpectralTilt(this.params.tilt);
   }
 
-  // 2. Amplitude-Modulated SSN (AM-SSN)
   playAMSSN(depth = 0.85) {
     this.stop();
     this.init();
@@ -170,7 +155,6 @@ export class AcousticEngine {
     this.currentType = 'am_ssn';
   }
 
-  // 3. Multi-Speaker Formant Babble (4, 8, 20 Talkers)
   playFormantBabble(speakerCount = 4) {
     this.stop();
     this.init();
@@ -182,12 +166,12 @@ export class AcousticEngine {
       { f: [500, 1700, 2500, 3700], bw: [65, 95, 150, 210] }
     ];
 
-    const safeCount = Math.min(speakerCount, 16);
+    const count = Math.min(Math.max(1, speakerCount), 32);
 
-    for (let s = 0; s < safeCount; s++) {
+    for (let s = 0; s < count; s++) {
       const osc = this.ctx.createOscillator();
       osc.type = 'sawtooth';
-      const f0 = 95 + (s * 14) + (Math.random() * 15);
+      const f0 = 85 + (s * 9) + (Math.random() * 12);
       osc.frequency.setValueAtTime(f0, this.ctx.currentTime);
 
       const vib = this.ctx.createOscillator();
@@ -197,8 +181,9 @@ export class AcousticEngine {
       vib.connect(osc.frequency);
       vib.start();
 
+      // Normalization preventing digital clipping up to 32 talkers
       const voiceGain = this.ctx.createGain();
-      voiceGain.gain.setValueAtTime(0.24 / Math.sqrt(safeCount), this.ctx.currentTime);
+      voiceGain.gain.setValueAtTime(0.22 / Math.sqrt(count), this.ctx.currentTime);
 
       const v = vowels[s % vowels.length];
       v.f.forEach((freq, idx) => {
@@ -217,10 +202,10 @@ export class AcousticEngine {
       this.activeNodes.push(osc, vib, vibGain, voiceGain);
     }
 
-    this.currentType = speakerCount <= 4 ? 'babble4' : (speakerCount <= 12 ? 'babble8' : 'babble20');
+    this.currentType = count <= 4 ? 'babble4' : (count <= 12 ? 'babble8' : 'babble20');
   }
 
-  // 4. True Multi-Talker Binaural Spatial Babble (ITD + ILD Spread)
+  // True Bipolar Dual-Delay Binaural Babble
   playBinauralBabble() {
     this.stop();
     this.init();
@@ -233,41 +218,53 @@ export class AcousticEngine {
     ];
 
     const merger = this.ctx.createChannelMerger(2);
+    const count = Math.min(Math.max(2, this.params.speakers), 32);
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < count; i++) {
       const osc = this.ctx.createOscillator();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(105 + i * 32, this.ctx.currentTime);
+      osc.frequency.setValueAtTime(95 + i * 16, this.ctx.currentTime);
 
       const bp = this.ctx.createBiquadFilter();
       bp.type = 'bandpass';
       const v = vowels[i % vowels.length];
-      bp.frequency.value = v[1]; // Dominant F2 Formant
+      bp.frequency.value = v[1];
       bp.Q.value = 6.0;
 
       const voiceGain = this.ctx.createGain();
-      voiceGain.gain.value = 0.18;
+      voiceGain.gain.value = 0.22 / Math.sqrt(count);
 
-      const delay = this.ctx.createDelay();
-      const panOffset = (i / 3) * 2 - 1; // Pan position: -1 (left) to +1 (right)
-      delay.delayTime.value = Math.max(0, panOffset * (this.params.itd * 1e-6));
+      // Symmetric Azimuth: -1.0 (Left) to +1.0 (Right)
+      const panOffset = (i / (count - 1 || 1)) * 2 - 1;
+      const targetItdSec = (this.params.itd * 1e-6) * panOffset;
 
+      // Dual Delay Network
+      const leftDelay = this.ctx.createDelay();
+      const rightDelay = this.ctx.createDelay();
+      leftDelay.delayTime.value = targetItdSec > 0 ? targetItdSec : 0;
+      rightDelay.delayTime.value = targetItdSec < 0 ? Math.abs(targetItdSec) : 0;
+
+      // Head-Shadow ILD Attenuation (-4.5 dB)
       const leftGain = this.ctx.createGain();
       const rightGain = this.ctx.createGain();
-      leftGain.gain.value = panOffset < 0 ? 1.0 : 0.45;
-      rightGain.gain.value = panOffset > 0 ? 1.0 : 0.45;
+      leftGain.gain.value = panOffset <= 0 ? 1.0 : Math.pow(10, (-4.5 * Math.abs(panOffset)) / 20);
+      rightGain.gain.value = panOffset >= 0 ? 1.0 : Math.pow(10, (-4.5 * Math.abs(panOffset)) / 20);
 
       osc.connect(bp);
       bp.connect(voiceGain);
-      voiceGain.connect(leftGain);
-      voiceGain.connect(delay);
-      delay.connect(rightGain);
 
+      // Left ear branch
+      voiceGain.connect(leftDelay);
+      leftDelay.connect(leftGain);
       leftGain.connect(merger, 0, 0);
+
+      // Right ear branch
+      voiceGain.connect(rightDelay);
+      rightDelay.connect(rightGain);
       rightGain.connect(merger, 0, 1);
 
       osc.start();
-      this.activeNodes.push(osc, bp, voiceGain, delay, leftGain, rightGain);
+      this.activeNodes.push(osc, bp, voiceGain, leftDelay, rightDelay, leftGain, rightGain);
     }
 
     merger.connect(this.voiceBus);
@@ -275,7 +272,6 @@ export class AcousticEngine {
     this.currentType = 'spatial';
   }
 
-  // 5. True 8-Band Noise-Vocoded Babble
   playVocodedBabble() {
     this.stop();
     this.init();
@@ -321,7 +317,6 @@ export class AcousticEngine {
     this.currentType = 'vocoded';
   }
 
-  // 6. Non-Destructive Band-Filtered Telephony (300 Hz – 3400 Hz)
   playBandFilteredTelephony() {
     this.playSSN();
     this.bandFilter.type = 'bandpass';
@@ -330,7 +325,6 @@ export class AcousticEngine {
     this.currentType = 'telephony';
   }
 
-  // 7. Envelope-Modulated Babble
   playEnvelopeModulatedBabble() {
     this.stop();
     this.init();
@@ -363,7 +357,6 @@ export class AcousticEngine {
     this.currentType = 'env_babble';
   }
 
-  // 8. Spectral Flickering (Dynamic Stochastic Sweeps)
   playSpectralFlickering() {
     this.stop();
     this.init();
@@ -398,7 +391,6 @@ export class AcousticEngine {
     this.currentType = 'flicker';
   }
 
-  // 9. Time-Reversed Speech Babble
   playTimeReversedBabble() {
     this.stop();
     this.init();
@@ -424,7 +416,6 @@ export class AcousticEngine {
     this.currentType = 'reversed';
   }
 
-  // 10. Neural Pseudospeech Markov Generator
   playNeuralPseudospeech() {
     this.stop();
     this.init();
@@ -463,26 +454,29 @@ export class AcousticEngine {
     this.currentType = 'formant';
   }
 
-  // Calibrated Continuous Spectral Tilt (6 to 24 dB/octave)
   setSpectralTilt(dB) {
     this.params.tilt = dB;
     if (!this.tiltFilter1 || !this.tiltFilter2) return;
 
     const now = this.ctx.currentTime;
-    if (dB <= 8) {
-      // ~6 dB/octave slope (1-pole emulation)
+    if (dB <= 2) {
+      // Flat unattenuated spectrum (0 dB/oct)
+      this.tiltFilter1.type = 'allpass';
+      this.tiltFilter2.type = 'allpass';
+    } else if (dB <= 8) {
+      // 6 dB/octave slope (1-pole emulation)
       this.tiltFilter1.type = 'lowpass';
       this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
       this.tiltFilter1.Q.setTargetAtTime(0.5, now, 0.05);
       this.tiltFilter2.type = 'allpass';
     } else if (dB <= 14) {
-      // 12 dB/octave (2nd-order Butterworth)
+      // 12 dB/octave calibrated Butterworth
       this.tiltFilter1.type = 'lowpass';
       this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
       this.tiltFilter1.Q.setTargetAtTime(0.7071, now, 0.05);
       this.tiltFilter2.type = 'allpass';
     } else {
-      // 18 - 24 dB/octave (Cascaded 4-pole network)
+      // 18 - 24 dB/octave cascaded 4-pole
       this.tiltFilter1.type = 'lowpass';
       this.tiltFilter1.frequency.setTargetAtTime(1000, now, 0.05);
       this.tiltFilter1.Q.setTargetAtTime(0.7071, now, 0.05);
@@ -503,10 +497,8 @@ export class AcousticEngine {
 
   setITD(microseconds) {
     this.params.itd = microseconds;
-    this.activeNodes.forEach(node => {
-      if (node.delayTime) {
-        node.delayTime.setTargetAtTime(microseconds * 1e-6, this.ctx.currentTime, 0.05);
-      }
-    });
+    if (this.currentType === 'spatial') {
+      this.playBinauralBabble();
+    }
   }
 }

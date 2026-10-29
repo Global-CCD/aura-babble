@@ -1,7 +1,3 @@
-/**
- * BabbleLab DSP Workstation v2.1.0 - Acoustic Catalog & Comparative Matrix
- */
-
 export const matrixData = [
   {
     id: 'ssn',
@@ -29,7 +25,7 @@ export const matrixData = [
   },
   {
     id: 'babble20',
-    name: '20+ Speaker Babble',
+    name: '20+ Speaker Babble (Crowd Murmur)',
     spectrum: 'Quasi-stationary Gaussian Speech Floor',
     masking: 'Predominantly Energetic',
     naturalness: 'Low Semantic Content (Cafeteria)',
@@ -37,7 +33,7 @@ export const matrixData = [
   },
   {
     id: 'am_ssn',
-    name: 'AM-SSN (4–8 Hz Syllabic)',
+    name: 'AM-SSN (Syllabic Glimpsing)',
     spectrum: 'LTASS with 5 Hz Sinusoidal Modulation',
     masking: 'Fluctuating (Allows Temporal Glimpsing)',
     naturalness: 'Low (Throbbing Mechanical)',
@@ -70,7 +66,7 @@ export const matrixData = [
   {
     id: 'spatial',
     name: 'Binaural Spatial Babble',
-    spectrum: 'Multi-Talker ITD (±600μs) + ILD (±4.5dB)',
+    spectrum: 'Bipolar ITD (±600μs) + Head Shadow ILD',
     masking: 'Spatial Release from Masking (SRM)',
     naturalness: 'Very High (True 3D Externalized)',
     use: 'Binaural hearing aid algorithm verification'
