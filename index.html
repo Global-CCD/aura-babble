@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BabbleLab DSP Workstation v2.0.0</title>
+  <!-- Pico.css v2 Modern Theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.azure.min.css">
+  <!-- Tabulator v6 Modern CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Sticky Glassmorphic Transport HUD -->
+  <header class="hud-header">
+    <div class="container">
+      <div class="hud-nav">
+        <ul>
+          <li><strong>BabbleLab DSP <small>v2.0.0</small></strong></li>
+          <li><span id="active-status-badge" class="badge badge-secondary">Engine: Offline</span></li>
+        </ul>
+        <ul>
+          <li><button id="btn-power" class="primary">▶ Start Master Engine</button></li>
+          <li><button id="btn-stop-engine" class="secondary" disabled>⏹ Mute</button></li>
+          <li><button id="btn-export-wav" class="outline">⬇ Export Calibrated WAV</button></li>
+        </ul>
+      </div>
+
+      <!-- Real-Time Scope & Spectrum Analyzers -->
+      <div class="visualizer-wrapper">
+        <div class="canvas-frame">
+          <span class="canvas-label">Time-Domain Oscilloscope</span>
+          <canvas id="scope-canvas" width="400" height="90"></canvas>
+        </div>
+        <div class="canvas-frame">
+          <span class="canvas-label">Frequency-Domain FFT Spectrum</span>
+          <canvas id="fft-canvas" width="400" height="90"></canvas>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Real-Time Parameter Rack -->
+    <section class="param-rack">
+      <details open>
+        <summary role="button" class="outline">Real-Time DSP Parameter Rack</summary>
+        <div class="grid">
+          <div class="slider-group">
+            <label for="ctrl-speakers">
+              <span>Talker Density ($N$)</span>
+              <strong id="val-speakers">4 Talkers</strong>
+            </label>
+            <input type="range" id="ctrl-speakers" min="1" max="16" value="4">
+          </div>
+          <div class="slider-group">
+            <label for="ctrl-tilt">
+              <span>Spectral Tilt ($>1\text{ kHz}$)</span>
+              <strong id="val-tilt">-12.0 dB/oct</strong>
+            </label>
+            <input type="range" id="ctrl-tilt" min="0" max="24" step="0.5" value="12">
+          </div>
+          <div class="slider-group">
+            <label for="ctrl-mod">
+              <span>Syllabic Mod ($f_m$)</span>
+              <strong id="val-mod">5.0 Hz</strong>
+            </label>
+            <input type="range" id="ctrl-mod" min="1" max="12" step="0.5" value="5">
+          </div>
+          <div class="slider-group">
+            <label for="ctrl-itd">
+              <span>Binaural Delay ($\text{ITD}$)</span>
+              <strong id="val-itd">±300 μs</strong>
+            </label>
+            <input type="range" id="ctrl-itd" min="0" max="600" step="25" value="300">
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Interactive Signal Matrix Table -->
+    <section>
+      <h2>Audited Babble & Noise Masking Matrix</h2>
+      <p>Select any standardized baseline or modulation variation to synthesize it in real time via Web Audio:</p>
+      <div id="matrix-grid"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
